@@ -1,0 +1,29 @@
+# Firebase
+serviceAccountKey.json
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Native builds
+ios/
+android/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Mac
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
