@@ -6,6 +6,15 @@ import { useFocusEffect } from 'expo-router';
 export default function RankingScreen() {
   const [rankings, setRankings] = useState<any[]>([]);
 
+  const MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  
+  function getCurrentMonth() {
+    return MONTHS[new Date().getMonth()];
+  }
+
   useFocusEffect(
     useCallback(() => {
       getRankings()
@@ -15,16 +24,18 @@ export default function RankingScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: 'lightgray' }]} >
-      <Text style={styles.title}>Rankings</Text>
+    <View style={[styles.container]} >
+      <Text style={styles.title}> {getCurrentMonth()} Rankings </Text>
       <FlatList
         data={rankings}
-        keyExtractor={(item) => item.customerID}
-        renderItem={({ item, index }) => (
+        keyExtractor={(item: any, index: number) => index.toString()}
+        renderItem={({ item, index }: { item: any; index: number }) => (
           <View style={styles.row}>
             <Text style={styles.rank}>#{index + 1}</Text>
-            <Text style={styles.name}>{item.name}</Text>
-            <Text style={styles.goal}>${item.networth.toLocaleString()}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{item.name}</Text>
+            </View>
+            <Text style={styles.goal}>{item.goal_percent}%</Text>
           </View>
         )}
       />
@@ -37,6 +48,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 60,
     paddingHorizontal: 20,
+    backgroundColor: "#f8f9fa",
   },
   title: {
     fontSize: 24,

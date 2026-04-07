@@ -1,6 +1,6 @@
 import { auth } from '@/firebaseconfig';
 
-const BACKEND_URL = 'http://10.1.58.20:8000';
+const BACKEND_URL = 'http://192.168.1.196:8000'; //'http://10.1.58.20:8000';
 
 export const getCustomer = async () => {
   // Get the JWT token from Firebase
