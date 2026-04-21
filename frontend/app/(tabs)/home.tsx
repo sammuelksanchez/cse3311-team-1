@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
-import { StyleSheet, TouchableOpacity, Text, View, ScrollView, TextInput, Modal, Platform } from 'react-native';
+import { StyleSheet, TouchableOpacity, Text, View, ScrollView, TextInput, Modal, Platform, Dimensions } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Circle } from 'react-native-svg';
 import { getCustomer, getFinancials, saveFinancials, getInvestmentItems, getLiabilityItems } from '@/services/api';
 
 const MONTHS = [
@@ -14,9 +15,13 @@ function getCurrentMonth() {
 }
 
 function getMonthsUpToCurrent() {
-  const currentMonthIndex = new Date().getMonth();
-  return MONTHS.slice(0, currentMonthIndex + 1);
+  return MONTHS.slice(0, new Date().getMonth() + 1);
 }
+
+const DONUT_SIZE = 120;
+const STROKE = 14;
+const RADIUS = (DONUT_SIZE - STROKE) / 2;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export default function TabOneScreen() {
   const [customer, setCustomer] = useState<any>(null);
@@ -29,56 +34,65 @@ export default function TabOneScreen() {
 
   const months = getMonthsUpToCurrent();
   const networth = (parseFloat(investments || '0') + parseFloat(savings || '0')) - parseFloat(liabilities || '0');
-  const goalPercent = customer ? Math.round((networth / parseFloat(customer.networth_goal)) * 100) : 0;
+  const goalPercent = customer ? Math.min(Math.round((networth / parseFloat(customer.networth_goal)) * 100), 100) : 0;
+  const strokeDashoffset = CIRCUMFERENCE - (goalPercent / 100) * CIRCUMFERENCE;
 
-  useFocusEffect(
-    useCallback(() => {
-      getCustomer().then(setCustomer).catch(console.error);
-    }, [])
-  );
+  useFocusEffect(useCallback(() => {
+    getCustomer().then(setCustomer).catch(console.error);
+  }, []));
 
-  useFocusEffect(
-    useCallback(() => {
-      getFinancials(selectedMonth).then(data => setSavings(data.savings)).catch(console.error);
-      getInvestmentItems(selectedMonth).then(items => {
-        const total = items.reduce((sum: number, i: any) => sum + parseFloat(i.amount || '0'), 0);
-        setInvestments(String(total));
-      }).catch(console.error);
-      getLiabilityItems(selectedMonth).then(items => {
-        const total = items.reduce((sum: number, i: any) => sum + parseFloat(i.amount || '0'), 0);
-        setLiabilities(String(total));
-      }).catch(console.error);
-    }, [selectedMonth])
-  );
-
-  const handleSave = async () => {
-    try {
-      await saveFinancials(investments, savings, liabilities, selectedMonth);
-      alert("Progress saved!");
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  useFocusEffect(useCallback(() => {
+    getFinancials(selectedMonth).then(data => setSavings(data.savings)).catch(console.error);
+    getInvestmentItems(selectedMonth).then(items => {
+      const total = items.reduce((sum: number, i: any) => sum + parseFloat(i.amount || '0'), 0);
+      setInvestments(String(total));
+    }).catch(console.error);
+    getLiabilityItems(selectedMonth).then(items => {
+      const total = items.reduce((sum: number, i: any) => sum + parseFloat(i.amount || '0'), 0);
+      setLiabilities(String(total));
+    }).catch(console.error);
+  }, [selectedMonth]));
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        
-        {/* Net Worth Card */}
-        <View style={styles.networthCard}>
-          <Text style={styles.networthLabel}>{selectedMonth} Net Worth</Text>
-          <Text style={styles.networthValue}>${networth.toLocaleString()}</Text>
-          <View style={styles.progressBarBg}>
-            <View style={[styles.progressBarFill, { width: `${Math.min(goalPercent, 100)}%` }]} />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+        {/* Hero Card */}
+        <View style={styles.heroCard}>
+          <Text style={styles.heroLabel}>{selectedMonth} Net Worth</Text>
+          <View style={styles.heroContent}>
+            <View style={styles.donutContainer}>
+              <Svg width={DONUT_SIZE} height={DONUT_SIZE}>
+                <Circle
+                  cx={DONUT_SIZE / 2} cy={DONUT_SIZE / 2} r={RADIUS}
+                  fill="none" stroke="#E8E8E8" strokeWidth={STROKE}
+                />
+                <Circle
+                  cx={DONUT_SIZE / 2} cy={DONUT_SIZE / 2} r={RADIUS}
+                  fill="none" stroke="#2E6F40" strokeWidth={STROKE}
+                  strokeDasharray={CIRCUMFERENCE}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="round"
+                  rotation="-90"
+                  origin={`${DONUT_SIZE / 2}, ${DONUT_SIZE / 2}`}
+                />
+              </Svg>
+              <View style={styles.donutCenter}>
+                <Text style={styles.donutPercent}>{goalPercent}%</Text>
+                <Text style={styles.donutSub}>of goal</Text>
+              </View>
+            </View>
+            <View style={styles.heroNumbers}>
+              <Text style={styles.networthValue}>${networth.toLocaleString()}</Text>
+              <Text style={styles.goalText}>goal ${parseFloat(customer?.networth_goal || '0').toLocaleString()}</Text>
+            </View>
           </View>
-          <Text style={styles.goalText}>
-            {goalPercent}% of ${parseFloat(customer?.networth_goal || '0').toLocaleString()} goal
-          </Text>
         </View>
 
         {/* Month Selector */}
         <TouchableOpacity style={styles.monthSelector} onPress={() => setShowMonthPicker(!showMonthPicker)}>
-          <Text style={styles.monthSelectorText}>{selectedMonth} Overview ▾</Text>
+          <Text style={styles.monthSelectorText}>{selectedMonth} overview</Text>
+          <Text style={styles.monthChevron}>▾</Text>
         </TouchableOpacity>
 
         {showMonthPicker && (
@@ -87,40 +101,34 @@ export default function TabOneScreen() {
               <TouchableOpacity
                 key={m}
                 style={[styles.monthOption, m === selectedMonth && styles.monthOptionSelected]}
-                onPress={() => {
-                  setSelectedMonth(m);
-                  setShowMonthPicker(false);
-                }}
+                onPress={() => { setSelectedMonth(m); setShowMonthPicker(false); }}
               >
-                <Text style={[styles.monthOptionText, m === selectedMonth && styles.monthOptionTextSelected]}>
-                  {m}
-                </Text>
+                <Text style={[styles.monthOptionText, m === selectedMonth && styles.monthOptionTextSelected]}>{m}</Text>
               </TouchableOpacity>
             ))}
           </View>
         )}
 
-        {/* Action List */}
-        <View style={styles.listSection}>
-          <TouchableOpacity style={styles.itemButton} onPress={() => router.push(`/investments?month=${selectedMonth}` as any)}>
-            <Text style={styles.itemButtonLabel}>Investments</Text>
-            <Text style={styles.itemButtonValue}>${parseFloat(investments || '0').toLocaleString()}</Text>
+        {/* Grid */}
+        <View style={styles.grid}>
+          <TouchableOpacity style={styles.gridCard} onPress={() => router.push(`/investments?month=${selectedMonth}` as any)}>
+            <Text style={styles.gridLabel}>Investments</Text>
+            <Text style={styles.gridValue}>${parseFloat(investments || '0').toLocaleString()}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.itemButton} onPress={() => setShowSavingsModal(true)}>
-            <Text style={styles.itemButtonLabel}>Savings</Text>
-            <Text style={styles.itemButtonValue}>${parseFloat(savings || '0').toLocaleString()}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.itemButton} onPress={() => router.push(`/liabilities?month=${selectedMonth}` as any)}>
-            <Text style={styles.itemButtonLabel}>Liabilities</Text>
-            <Text style={styles.itemButtonValue}>${parseFloat(liabilities || '0').toLocaleString()}</Text>
+          <TouchableOpacity style={styles.gridCard} onPress={() => setShowSavingsModal(true)}>
+            <Text style={styles.gridLabel}>Savings</Text>
+            <Text style={styles.gridValue}>${parseFloat(savings || '0').toLocaleString()}</Text>
           </TouchableOpacity>
         </View>
 
+        <TouchableOpacity style={[styles.gridCard, styles.liabilitiesCard]} onPress={() => router.push(`/liabilities?month=${selectedMonth}` as any)}>
+          <Text style={styles.gridLabel}>Liabilities</Text>
+          <Text style={[styles.gridValue, styles.liabilityValue]}>${parseFloat(liabilities || '0').toLocaleString()}</Text>
+        </TouchableOpacity>
+
       </ScrollView>
 
-      {/* Reusable Modal with Clean Theme */}
       <Modal visible={showSavingsModal} transparent animationType="fade">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowSavingsModal(false)}>
           <View style={styles.modalBox}>
@@ -131,7 +139,7 @@ export default function TabOneScreen() {
               onChangeText={setSavings}
               keyboardType="numeric"
               placeholder="Enter amount"
-              placeholderTextColor="#666"
+              placeholderTextColor="#999"
               autoFocus
             />
             <TouchableOpacity style={styles.primaryButton} onPress={() => {
@@ -148,160 +156,148 @@ export default function TabOneScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f8f9fa",
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  networthCard: {
+  container: { flex: 1, backgroundColor: '#f4f4f4' },
+  scrollContent: { paddingBottom: 32 },
+
+  heroCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
     padding: 24,
-    marginBottom: 20,
-    alignItems: 'center',
-    // Soft shadow
+    paddingBottom: 28,
+    marginBottom: 16,
     ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 },
-      android: { elevation: 3 }
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
+      android: { elevation: 2 }
     })
   },
-  networthLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
+  heroLabel: {
+    fontSize: 12,
+    color: '#999',
     textTransform: 'uppercase',
     letterSpacing: 1,
-    marginBottom: 8,
+    fontWeight: '600',
+    marginBottom: 16,
   },
-  networthValue: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  progressBarBg: {
-    height: 8,
-    width: '100%',
-    backgroundColor: '#eee',
-    borderRadius: 4,
-    marginTop: 20,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#2E6F40',
-  },
-  goalText: {
-    fontSize: 13,
-    color: '#888',
-    marginTop: 10,
-  },
-  monthSelector: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
+  heroContent: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+  },
+  donutContainer: {
+    width: DONUT_SIZE,
+    height: DONUT_SIZE,
+    position: 'relative',
+  },
+  donutCenter: {
+    position: 'absolute',
+    inset: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  monthSelectorText: {
-    fontSize: 16,
+  donutPercent: {
+    fontSize: 20,
     fontWeight: '600',
-    color: '#2E6F40',
+    color: '#1a1a1a',
+    lineHeight: 22,
   },
-  monthDropdown: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    overflow: 'hidden',
+  donutSub: {
+    fontSize: 10,
+    color: '#999',
+    marginTop: 2,
   },
-  monthOption: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  monthOptionSelected: {
-    backgroundColor: '#CFFFDC',
-  },
-  monthOptionText: {
-    fontSize: 16,
-    color: '#2E6F40',
-  },
-  monthOptionTextSelected: {
-    color: '#2E6F40',
-    fontWeight: 'bold',
-  },
-  listSection: {
-    marginBottom: 20,
-  },
-  itemButton: {
+  heroNumbers: { flex: 1 },
+  networthValue: { fontSize: 32, fontWeight: '600', color: '#1a1a1a', lineHeight: 36 },
+  goalText: { fontSize: 13, color: '#999', marginTop: 6 },
+
+  monthSelector: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 18,
+    padding: 14,
+    marginHorizontal: 16,
+    marginBottom: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 0.5,
+    borderColor: '#e0e0e0',
+  },
+  monthSelectorText: { fontSize: 15, fontWeight: '500', color: '#1a1a1a' },
+  monthChevron: { fontSize: 13, color: '#2E6F40', fontWeight: '600' },
+
+  monthDropdown: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginHorizontal: 16,
     marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#eee',
+    borderWidth: 0.5,
+    borderColor: '#e0e0e0',
+    overflow: 'hidden',
   },
-  itemButtonLabel: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
+  monthOption: { padding: 14, borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0' },
+  monthOptionSelected: { backgroundColor: '#f0f7f2' },
+  monthOptionText: { fontSize: 15, color: '#333' },
+  monthOptionTextSelected: { color: '#2E6F40', fontWeight: '500' },
+
+  grid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 10,
   },
-  itemButtonValue: {
-    fontSize: 16,
-    color: '#2E6F40',
-    fontWeight: 'bold',
+  gridCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 0.5,
+    borderColor: '#e0e0e0',
   },
+  liabilitiesCard: {
+    flex: 0,
+    marginHorizontal: 16,
+  },
+  gridLabel: {
+    fontSize: 11,
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  gridValue: { fontSize: 20, fontWeight: '500', color: '#2E6F40' },
+  liabilityValue: { color: '#C0392B' },
+
   input: {
-    height: 55,
-    backgroundColor: "#f8f9fa",
+    height: 50,
+    backgroundColor: '#f8f9fa',
     borderRadius: 8,
-    paddingHorizontal: 15,
-    marginVertical: 15,
-    borderWidth: 1,
-    borderColor: "#ddd",
+    paddingHorizontal: 14,
+    marginVertical: 14,
+    borderWidth: 0.5,
+    borderColor: '#ddd',
     fontSize: 16,
+    color: '#1a1a1a',
   },
   primaryButton: {
-    backgroundColor: "#2E6F40",
-    height: 55,
+    backgroundColor: '#2E6F40',
+    height: 50,
     borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  primaryButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '500' },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
-    padding: 20,
+    padding: 24,
   },
   modalBox: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 25,
-    // Shadow
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10 },
-      android: { elevation: 5 }
-    })
+    padding: 24,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#333',
-  },
+  modalTitle: { fontSize: 18, fontWeight: '500', color: '#1a1a1a', textAlign: 'center' },
 });
